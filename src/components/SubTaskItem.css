@@ -1,0 +1,167 @@
+.subtask-item {
+  background: rgba(248, 249, 250, 0.8);
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+  cursor: grab;
+}
+
+.subtask-item:hover {
+  background: rgba(248, 249, 250, 1);
+  border-color: #dee2e6;
+}
+
+.subtask-item:active {
+  cursor: grabbing;
+}
+
+.subtask-item.completed {
+  opacity: 0.7;
+  background: rgba(40, 167, 69, 0.1);
+  border-color: rgba(40, 167, 69, 0.2);
+}
+
+.subtask-item.priority-high {
+  border-left: 3px solid #ff4757;
+}
+
+.subtask-item.priority-medium {
+  border-left: 3px solid #ffa502;
+}
+
+.subtask-item.priority-low {
+  border-left: 3px solid #2ed573;
+}
+
+.subtask-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.subtask-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.subtask-drag-handle {
+  color: #ced4da;
+  cursor: grab;
+  font-size: 10px;
+  padding: 1px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.subtask-drag-handle:hover {
+  color: #6c757d;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.subtask-drag-handle:active {
+  cursor: grabbing;
+}
+
+.subtask-checkbox {
+  margin: 0;
+  cursor: pointer;
+  transform: scale(1.1);
+}
+
+.priority-indicator.small {
+  font-size: 10px;
+}
+
+.subtask-title {
+  font-size: 14px;
+  color: #495057;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.subtask-title.completed {
+  text-decoration: line-through;
+  color: #6c757d;
+}
+
+.subtask-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.subtask-item:hover .subtask-actions {
+  opacity: 1;
+}
+
+.edit-subtask-btn, .delete-subtask-btn {
+  background: none;
+  border: none;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+
+.edit-subtask-btn:hover {
+  background: rgba(0, 123, 255, 0.1);
+}
+
+.delete-subtask-btn:hover {
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.subtask-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subtask-title-input {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.subtask-title-input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.save-btn.small, .cancel-btn.small {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .subtask-item {
+    padding: 8px;
+  }
+
+  .subtask-title {
+    font-size: 13px;
+  }
+
+  .subtask-actions {
+    opacity: 1;
+  }
+
+  .priority-indicator.small {
+    font-size: 9px;
+  }
+}

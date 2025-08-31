@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm start)",
+      "Bash(taskkill:*)",
+      "Bash(move:*)",
+      "Bash(npm install:*)",
+      "Bash(PORT=3001 npm start)",
+      "Bash(PORT=3000 npm start)",
+      "Bash(/bashes)",
+      "Bash(touch .gitignore)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
