@@ -77,7 +77,13 @@ const Column: React.FC<ColumnProps> = ({
       className="column"
     >
       <div className="column-header">
-        <div className="column-title-section" {...attributes} {...listeners}>
+        <div 
+          className="column-title-section" 
+          {...attributes} 
+          {...listeners}
+          style={{ touchAction: 'none' }}
+          title="Drag to reorder columns"
+        >
           {isEditing ? (
             <input
               type="text"

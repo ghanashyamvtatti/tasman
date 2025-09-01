@@ -161,7 +161,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
         <>
           <div className="task-header">
             <div className="task-left">
-              <div className="drag-handle" {...attributes} {...listeners}>
+              <div 
+                className="drag-handle" 
+                {...attributes} 
+                {...listeners}
+                style={{ touchAction: 'none' }}
+                title="Drag to move task"
+              >
                 ⋮⋮
               </div>
               <div className="task-priority">

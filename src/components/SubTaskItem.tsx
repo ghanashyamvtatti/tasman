@@ -120,7 +120,13 @@ const SubTaskItem: React.FC<SubTaskItemProps> = ({
       ) : (
         <div className="subtask-content">
           <div className="subtask-left">
-            <div className="subtask-drag-handle" {...attributes} {...listeners}>
+            <div 
+              className="subtask-drag-handle" 
+              {...attributes} 
+              {...listeners}
+              style={{ touchAction: 'none' }}
+              title="Drag to move subtask"
+            >
               ⋮
             </div>
             <input

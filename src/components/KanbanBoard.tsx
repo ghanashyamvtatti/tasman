@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DndContext, DragEndEvent, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, closestCorners, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { Board, Column as ColumnType, Task } from '../types';
 import { saveBoardById, loadBoardById, getAllBoards, updateBoardTitle } from '../utils/storage';
@@ -25,7 +25,14 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId, onBackToManager }) =
       activationConstraint: {
         distance: 8,
       },
-    })
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor)
   );
 
   useEffect(() => {

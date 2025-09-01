@@ -9,7 +9,8 @@
       "Bash(PORT=3001 npm start)",
       "Bash(PORT=3000 npm start)",
       "Bash(/bashes)",
-      "Bash(touch .gitignore)"
+      "Bash(touch .gitignore)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []
