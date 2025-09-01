@@ -2,23 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { DndContext, DragEndEvent, closestCorners, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { Board, Column as ColumnType, Task } from '../types';
-import { saveBoardById, loadBoardById, getAllBoards, updateBoardTitle } from '../utils/storage';
+import { loadBoardById, getAllBoards } from '../utils/storage';
+import { cloudStorageManager } from '../services/cloudStorage';
+import { useCloudSync } from '../contexts/CloudSyncContext';
 import Column from './Column';
 import TasmanLogo from './TasmanLogo';
 import CloudSync from './CloudSync';
+import ShareBoard from './ShareBoard';
 import './KanbanBoard.css';
 
 interface KanbanBoardProps {
   boardId: string;
   onBackToManager: () => void;
+  onShowInstructions?: () => void;
 }
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId, onBackToManager }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId, onBackToManager, onShowInstructions }) => {
   const [board, setBoard] = useState<Board | null>(null);
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [isEditingBoardTitle, setIsEditingBoardTitle] = useState(false);
   const [editBoardTitle, setEditBoardTitle] = useState('');
   const [showAddColumnModal, setShowAddColumnModal] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const { status } = useCloudSync();
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -42,15 +48,14 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId, onBackToManager }) =
       setBoard(loadedBoard);
     } else {
       // If board doesn't exist, go back to manager
-      console.log('Board not found:', boardId);
       onBackToManager();
     }
   }, [boardId, onBackToManager]);
 
   useEffect(() => {
-    // Save board whenever it changes
+    // Save board whenever it changes (automatically syncs to cloud if signed in)
     if (board) {
-      saveBoardById(boardId, board);
+      cloudStorageManager.saveBoard(board);
     }
   }, [board, boardId]);
 
@@ -303,10 +308,10 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId, onBackToManager }) =
     setIsEditingBoardTitle(true);
   };
 
-  const handleBoardTitleSubmit = () => {
+  const handleBoardTitleSubmit = async () => {
     if (!board || !editBoardTitle.trim()) return;
     
-    updateBoardTitle(boardId, editBoardTitle.trim());
+    await cloudStorageManager.updateBoardTitle(boardId, editBoardTitle.trim());
     setBoard(prevBoard => {
       if (!prevBoard) return null;
       return {
@@ -320,6 +325,14 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId, onBackToManager }) =
   const handleBoardTitleCancel = () => {
     setIsEditingBoardTitle(false);
     setEditBoardTitle('');
+  };
+
+  const handleShareBoard = () => {
+    setShareModalOpen(true);
+  };
+
+  const handleCloseShareModal = () => {
+    setShareModalOpen(false);
   };
 
   const updateColumn = (columnId: string, newTitle: string) => {
@@ -480,7 +493,25 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId, onBackToManager }) =
             </h1>
           )}
           <div className="header-controls">
+            {onShowInstructions && (
+              <button 
+                className="help-board-btn"
+                onClick={onShowInstructions}
+                title="Help & Instructions"
+              >
+                ❓
+              </button>
+            )}
             <CloudSync compact />
+            {status.isSignedIn && (
+              <button 
+                className="share-board-btn"
+                onClick={handleShareBoard}
+                title="Share board"
+              >
+                👥 Share
+              </button>
+            )}
             <button 
               className="back-to-manager-btn"
               onClick={onBackToManager}
@@ -554,6 +585,15 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId, onBackToManager }) =
             </div>
           </div>
         </div>
+      )}
+
+      {board && (
+        <ShareBoard
+          boardId={board.id}
+          boardTitle={board.title}
+          isOpen={shareModalOpen}
+          onClose={handleCloseShareModal}
+        />
       )}
     </div>
   );

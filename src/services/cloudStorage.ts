@@ -24,9 +24,7 @@ class CloudStorageManager {
 
   async initialize(): Promise<CloudSyncStatus> {
     try {
-      console.log('CloudStorageManager: Initializing...');
       const status = await googleDriveManager.initialize();
-      console.log('CloudStorageManager: Google Drive status:', status);
       
       const result = {
         isCloudEnabled: status.isInitialized,
@@ -37,7 +35,6 @@ class CloudStorageManager {
         error: this.error
       };
       
-      console.log('CloudStorageManager: Returning status:', result);
       return result;
     } catch (error) {
       this.error = 'Failed to initialize cloud storage';
@@ -56,8 +53,8 @@ class CloudStorageManager {
       const success = await googleDriveManager.signIn();
       if (success) {
         this.error = undefined;
-        // Auto-sync after sign-in
-        setTimeout(() => this.syncToCloud(), 1000);
+        // Auto-download from cloud after sign-in to get latest data
+        setTimeout(() => this.syncFromCloud(), 1000);
       } else {
         this.error = 'Failed to sign in to Google Drive';
       }
@@ -152,13 +149,20 @@ class CloudStorageManager {
     try {
       const localBoards = localStorage.getAllBoards();
       let uploadedCount = 0;
+      let failedCount = 0;
 
       for (const boardInfo of localBoards) {
         const board = localStorage.loadBoardById(boardInfo.id);
         if (board) {
-          const success = await googleDriveManager.uploadBoard(board);
-          if (success) {
-            uploadedCount++;
+          try {
+            const success = await googleDriveManager.uploadBoard(board);
+            if (success) {
+              uploadedCount++;
+            } else {
+              failedCount++;
+            }
+          } catch (uploadError) {
+            failedCount++;
           }
         }
       }
@@ -166,11 +170,21 @@ class CloudStorageManager {
       this.lastSyncTime = new Date();
       this.syncInProgress = false;
 
-      return {
-        success: true,
-        message: `Successfully synced ${uploadedCount} boards to cloud`,
-        boardsUpdated: uploadedCount
-      };
+      if (uploadedCount > 0) {
+        return {
+          success: true,
+          message: failedCount > 0 
+            ? `Synced ${uploadedCount} boards to cloud (${failedCount} failed)`
+            : `Successfully synced ${uploadedCount} boards to cloud`,
+          boardsUpdated: uploadedCount
+        };
+      } else {
+        this.error = `No boards could be uploaded (${failedCount} failed)`;
+        return {
+          success: false,
+          message: this.error
+        };
+      }
     } catch (error) {
       this.error = 'Sync to cloud failed';
       this.syncInProgress = false;
@@ -183,7 +197,7 @@ class CloudStorageManager {
     }
   }
 
-  async syncFromCloud(): Promise<SyncResult> {
+  async syncFromCloud(isPeriodicSync = false): Promise<SyncResult> {
     const status = googleDriveManager.getStatus();
     if (!status.isSignedIn) {
       return {
@@ -205,11 +219,35 @@ class CloudStorageManager {
     try {
       const cloudBoards = await googleDriveManager.listCloudBoards();
       let downloadedCount = 0;
+      let updatedCount = 0;
 
       for (const cloudBoardInfo of cloudBoards) {
         const cloudBoard = await googleDriveManager.downloadBoard(cloudBoardInfo.id);
         if (cloudBoard) {
-          localStorage.saveBoardById(cloudBoard.id, cloudBoard);
+          // Check if local board exists and needs updating
+          const localBoard = localStorage.loadBoardById(cloudBoard.id);
+          let shouldUpdate = !localBoard;
+          
+          if (localBoard && isPeriodicSync) {
+            // For periodic sync, compare content to see if there are changes
+            const localContent = JSON.stringify({
+              title: localBoard.title,
+              columns: localBoard.columns
+            });
+            const cloudContent = JSON.stringify({
+              title: cloudBoard.title,
+              columns: cloudBoard.columns
+            });
+            shouldUpdate = localContent !== cloudContent;
+          } else if (localBoard && !isPeriodicSync) {
+            // For manual sync, always update
+            shouldUpdate = true;
+          }
+
+          if (shouldUpdate) {
+            localStorage.saveBoardById(cloudBoard.id, cloudBoard);
+            updatedCount++;
+          }
           downloadedCount++;
         }
       }
@@ -217,10 +255,14 @@ class CloudStorageManager {
       this.lastSyncTime = new Date();
       this.syncInProgress = false;
 
+      const message = isPeriodicSync 
+        ? (updatedCount > 0 ? `Periodic sync: Updated ${updatedCount} board(s)` : 'Periodic sync: No updates needed')
+        : `Successfully downloaded ${downloadedCount} boards from cloud`;
+
       return {
         success: true,
-        message: `Successfully downloaded ${downloadedCount} boards from cloud`,
-        boardsUpdated: downloadedCount
+        message,
+        boardsUpdated: updatedCount
       };
     } catch (error) {
       this.error = 'Sync from cloud failed';
@@ -251,6 +293,27 @@ class CloudStorageManager {
     }
   }
 
+  async updateBoardTitle(boardId: string, title: string): Promise<void> {
+    // Update locally
+    localStorage.updateBoardTitle(boardId, title);
+    
+    // Sync updated board to cloud
+    const updatedBoard = localStorage.loadBoardById(boardId);
+    if (updatedBoard) {
+      await this.saveBoard(updatedBoard);
+    }
+  }
+
+  async createBoard(title: string): Promise<string> {
+    // Create locally and get the new board
+    const newBoard = localStorage.createNewBoard(title);
+    
+    // Sync to cloud
+    await this.saveBoard(newBoard);
+    
+    return newBoard.id;
+  }
+
   getStatus(): CloudSyncStatus {
     const driveStatus = googleDriveManager.getStatus();
     return {
@@ -261,6 +324,12 @@ class CloudStorageManager {
       syncInProgress: this.syncInProgress,
       error: this.error
     };
+  }
+
+  // Emergency method to reset sync status if it gets stuck
+  resetSyncStatus(): void {
+    this.syncInProgress = false;
+    this.error = undefined;
   }
 }
 

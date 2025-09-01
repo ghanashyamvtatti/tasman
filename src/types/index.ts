@@ -25,4 +25,7 @@ export interface Board {
   id: string;
   title: string;
   columns: Column[];
+  owner?: string;
+  sharedWith?: string[];
+  isShared?: boolean;
 }

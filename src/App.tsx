@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import KanbanBoard from './components/KanbanBoard';
 import BoardManager from './components/BoardManager';
+import Instructions from './components/Instructions';
 import { getAllBoards, loadBoard, getDefaultBoard, saveBoardById } from './utils/storage';
 import { CloudSyncProvider } from './contexts/CloudSyncContext';
 import './App.css';
 
 function App() {
-  const [currentView, setCurrentView] = useState<'manager' | 'board'>('manager');
+  const [currentView, setCurrentView] = useState<'manager' | 'board' | 'instructions'>('manager');
   const [currentBoardId, setCurrentBoardId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,15 +44,30 @@ function App() {
     setCurrentBoardId(null);
   };
 
+  const handleShowInstructions = () => {
+    setCurrentView('instructions');
+  };
+
+  const handleBackFromInstructions = () => {
+    if (currentBoardId) {
+      setCurrentView('board');
+    } else {
+      setCurrentView('manager');
+    }
+  };
+
   return (
     <CloudSyncProvider>
       <div className="App">
         {currentView === 'manager' ? (
           <BoardManager onSelectBoard={handleSelectBoard} />
+        ) : currentView === 'instructions' ? (
+          <Instructions onBack={handleBackFromInstructions} />
         ) : (
           <KanbanBoard 
             boardId={currentBoardId!} 
             onBackToManager={handleBackToManager}
+            onShowInstructions={handleShowInstructions}
           />
         )}
       </div>

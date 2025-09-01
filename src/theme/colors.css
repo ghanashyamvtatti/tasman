@@ -1,0 +1,74 @@
+/* Tasman Color Theme - Consistent color variables for the entire application */
+
+:root {
+  /* Primary Brand Colors */
+  --tasman-primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --tasman-primary-blue: #667eea;
+  --tasman-primary-purple: #764ba2;
+  
+  /* Glass Morphism Colors */
+  --glass-light: rgba(255, 255, 255, 0.95);
+  --glass-medium: rgba(255, 255, 255, 0.2);
+  --glass-dark: rgba(255, 255, 255, 0.1);
+  --glass-darker: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-border-light: rgba(255, 255, 255, 0.2);
+  
+  /* Backdrop & Shadow */
+  --backdrop-blur: blur(10px);
+  --backdrop-blur-strong: blur(20px);
+  --shadow-light: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --shadow-medium: 0 12px 40px rgba(0, 0, 0, 0.15);
+  --shadow-strong: 0 20px 40px rgba(0, 0, 0, 0.3);
+  
+  /* Text Colors */
+  --text-primary: #333;
+  --text-secondary: #666;
+  --text-light: #999;
+  --text-white: white;
+  --text-white-secondary: rgba(255, 255, 255, 0.9);
+  --text-white-tertiary: rgba(255, 255, 255, 0.8);
+  
+  /* Action Colors */
+  --success-primary: #4CAF50;
+  --success-secondary: #45a049;
+  --success-tertiary: #3d8b40;
+  --warning-primary: #ff9800;
+  --error-primary: #f44336;
+  --info-primary: #3b82f6;
+  --info-secondary: #2563eb;
+  
+  /* Neutral Colors */
+  --neutral-light: #f8f9fa;
+  --neutral-medium: #e0e0e0;
+  --neutral-dark: #cccccc;
+  --neutral-darker: #999999;
+  
+  /* Interactive States */
+  --hover-light: rgba(255, 255, 255, 0.1);
+  --hover-medium: rgba(255, 255, 255, 0.3);
+  --hover-dark: rgba(0, 0, 0, 0.1);
+  --active-scale: 0.98;
+  
+  /* Spacing & Measurements */
+  --radius-small: 6px;
+  --radius-medium: 8px;
+  --radius-large: 12px;
+  --radius-xlarge: 15px;
+  
+  /* Transitions */
+  --transition-fast: all 0.2s ease;
+  --transition-medium: all 0.3s ease;
+}
+
+/* Dark theme variables (for future use) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --glass-light: rgba(0, 0, 0, 0.8);
+    --glass-medium: rgba(0, 0, 0, 0.6);
+    --glass-dark: rgba(0, 0, 0, 0.4);
+    --text-primary: #fff;
+    --text-secondary: #ccc;
+    --neutral-light: #1a1a1a;
+  }
+}

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useCloudSync } from '../contexts/CloudSyncContext';
 import './CloudSync.css';
 
@@ -10,6 +11,8 @@ const CloudSync: React.FC<CloudSyncProps> = ({ compact = false }) => {
   const { status, signIn, signOut, syncToCloud, syncFromCloud } = useCloudSync();
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [showDetails, setShowDetails] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+  const detailsButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleSignIn = async () => {
     const success = await signIn();
@@ -40,6 +43,47 @@ const CloudSync: React.FC<CloudSyncProps> = ({ compact = false }) => {
     setTimeout(() => setSyncMessage(''), 3000);
   };
 
+  const calculateDropdownPosition = () => {
+    if (detailsButtonRef.current) {
+      const rect = detailsButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right
+      });
+    }
+  };
+
+  const handleToggleDetails = () => {
+    if (!showDetails) {
+      calculateDropdownPosition();
+    }
+    setShowDetails(!showDetails);
+  };
+
+  useEffect(() => {
+    if (showDetails) {
+      const handleResize = () => calculateDropdownPosition();
+      const handleClickOutside = (event: MouseEvent) => {
+        const target = event.target as Node;
+        // Check if click is outside both the button and the dropdown
+        if (detailsButtonRef.current && !detailsButtonRef.current.contains(target)) {
+          const dropdown = document.querySelector('.cloud-dropdown');
+          if (!dropdown || !dropdown.contains(target)) {
+            setShowDetails(false);
+          }
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
+      document.addEventListener('mousedown', handleClickOutside);
+      
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showDetails]);
+
   if (!status.isCloudEnabled) {
     return (
       <div className={`cloud-sync ${compact ? 'compact' : ''}`}>
@@ -65,14 +109,21 @@ const CloudSync: React.FC<CloudSyncProps> = ({ compact = false }) => {
               <span className="status-dot"></span>
             </div>
             <button 
-              onClick={() => setShowDetails(!showDetails)}
+              ref={detailsButtonRef}
+              onClick={handleToggleDetails}
               className="cloud-btn details"
               title="Cloud sync options"
             >
               ⚙️
             </button>
-            {showDetails && (
-              <div className="cloud-dropdown">
+            {showDetails && createPortal(
+              <div 
+                className="cloud-dropdown"
+                style={{
+                  top: `${dropdownPosition.top}px`,
+                  right: `${dropdownPosition.right}px`
+                }}
+              >
                 <div className="user-info">
                   <strong>{status.userEmail}</strong>
                   {status.lastSyncTime && (
@@ -95,7 +146,8 @@ const CloudSync: React.FC<CloudSyncProps> = ({ compact = false }) => {
                     {status.error}
                   </div>
                 )}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         )}

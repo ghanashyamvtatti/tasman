@@ -1,20 +1,38 @@
-import { gapi } from 'gapi-script';
 import { Board } from '../types';
 
-// Type extensions for gapi.client.drive
-declare global {
-  namespace gapi.client {
-    const drive: any;
-  }
+export interface BoardPermission {
+  id: string;
+  emailAddress: string;
+  role: string;
+}
+
+interface DrivePermission {
+  id?: string;
+  emailAddress?: string;
+  role?: string;
+  type?: string;
+}
+
+interface DriveFile {
+  id?: string;
+  name?: string;
+  owners?: Array<{ displayName?: string; emailAddress?: string }>;
+  modifiedTime?: string;
 }
 
 const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 const API_KEY = process.env.REACT_APP_GOOGLE_API_KEY;
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-// Use minimal scope to test
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 const TASMAN_FOLDER_NAME = 'Tasman Boards';
+
+declare global {
+  interface Window {
+    google: any;
+    gapi: any;
+  }
+}
 
 export interface GoogleDriveService {
   isInitialized: boolean;
@@ -27,62 +45,25 @@ class GoogleDriveManager {
   private signedIn = false;
   private userEmail?: string;
   private tasmanFolderId?: string;
+  private accessToken?: string;
 
   async initialize(): Promise<GoogleDriveService> {
     if (!CLIENT_ID || !API_KEY) {
-      console.warn('Google Drive integration disabled: Missing CLIENT_ID or API_KEY');
       return { isInitialized: false, isSignedIn: false };
     }
 
-    console.log('Initializing Google Drive API with:', {
-      clientId: CLIENT_ID,
-      apiKey: API_KEY ? 'Present' : 'Missing',
-      origin: window.location.origin,
-      scopes: SCOPES,
-      discoveryDoc: DISCOVERY_DOC
-    });
-
     try {
+      // Load Google Identity Services and Google APIs
+      await this.loadGoogleScripts();
+      
+      // Initialize Google APIs Client Library
       await new Promise<void>((resolve, reject) => {
-        gapi.load('client:auth2', async () => {
+        window.gapi.load('client', async () => {
           try {
-            await gapi.client.init({
+            await window.gapi.client.init({
               apiKey: API_KEY,
-              clientId: CLIENT_ID,
               discoveryDocs: [DISCOVERY_DOC],
-              scope: SCOPES
             });
-
-            this.initialized = true;
-            const authInstance = gapi.auth2.getAuthInstance();
-            this.signedIn = authInstance.isSignedIn.get();
-            
-            // Test if Drive API is accessible
-            console.log('Testing Drive API access...');
-            try {
-              await gapi.client.drive.about.get();
-              console.log('Drive API is accessible');
-            } catch (apiError) {
-              console.warn('Drive API test failed (this is expected if not signed in):', apiError);
-            }
-            
-            if (this.signedIn) {
-              const user = authInstance.currentUser.get();
-              this.userEmail = user.getBasicProfile().getEmail();
-            }
-
-            // Listen for sign-in state changes
-            authInstance.isSignedIn.listen((isSignedIn: boolean) => {
-              this.signedIn = isSignedIn;
-              if (isSignedIn) {
-                const user = authInstance.currentUser.get();
-                this.userEmail = user.getBasicProfile().getEmail();
-              } else {
-                this.userEmail = undefined;
-                this.tasmanFolderId = undefined;
-              }
-            });
-            
             resolve();
           } catch (error) {
             reject(error);
@@ -90,98 +71,106 @@ class GoogleDriveManager {
         });
       });
 
-      if (this.signedIn) {
-        await this.ensureTasmanFolder();
-      }
+      // Initialize Google Identity Services
+      window.google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: () => {}, // We'll handle sign-in manually
+      });
 
-      console.log('Google Drive API initialized successfully');
+      this.initialized = true;
+      
       return {
         isInitialized: this.initialized,
         isSignedIn: this.signedIn,
         userEmail: this.userEmail
       };
     } catch (error) {
-      console.error('Failed to initialize Google Drive API:', error);
-      console.error('Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
       return { isInitialized: false, isSignedIn: false };
     }
   }
 
+  private async loadGoogleScripts(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Load Google Identity Services
+      if (!document.querySelector('script[src*="accounts.google.com"]')) {
+        const gsiScript = document.createElement('script');
+        gsiScript.src = 'https://accounts.google.com/gsi/client';
+        gsiScript.onload = () => {
+          // Load Google APIs Client Library
+          if (!document.querySelector('script[src*="apis.google.com"]')) {
+            const gapiScript = document.createElement('script');
+            gapiScript.src = 'https://apis.google.com/js/api.js';
+            gapiScript.onload = () => resolve();
+            gapiScript.onerror = () => reject(new Error('Failed to load Google APIs Client Library'));
+            document.head.appendChild(gapiScript);
+          } else {
+            resolve();
+          }
+        };
+        gsiScript.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+        document.head.appendChild(gsiScript);
+      } else if (!document.querySelector('script[src*="apis.google.com"]')) {
+        const gapiScript = document.createElement('script');
+        gapiScript.src = 'https://apis.google.com/js/api.js';
+        gapiScript.onload = () => resolve();
+        gapiScript.onerror = () => reject(new Error('Failed to load Google APIs Client Library'));
+        document.head.appendChild(gapiScript);
+      } else {
+        resolve();
+      }
+    });
+  }
+
   async signIn(): Promise<boolean> {
     if (!this.initialized) {
-      console.error('Google Drive API not initialized');
       return false;
     }
 
     try {
-      const authInstance = gapi.auth2.getAuthInstance();
-      console.log('Attempting Google Drive sign-in...');
-      console.log('Auth instance details:', {
-        isSignedIn: authInstance.isSignedIn.get(),
-        currentUser: authInstance.currentUser.get()
+      
+      return new Promise((resolve) => {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: async (response: any) => {
+            if (response.error) {
+              resolve(false);
+              return;
+            }
+
+            this.accessToken = response.access_token;
+            
+            // Set the access token for gapi client
+            window.gapi.client.setToken({ access_token: this.accessToken });
+            
+            // Get user info
+            try {
+              const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                headers: {
+                  'Authorization': `Bearer ${this.accessToken}`
+                }
+              });
+              
+              if (userInfoResponse.ok) {
+                const userInfo = await userInfoResponse.json();
+                this.userEmail = userInfo.email;
+                this.signedIn = true;
+                
+                await this.ensureTasmanFolder();
+                resolve(true);
+              } else {
+                resolve(false);
+              }
+            } catch (error) {
+              resolve(false);
+            }
+          },
+        });
+
+        // Request access token
+        tokenClient.requestAccessToken({ prompt: 'consent' });
       });
-      
-      // Check if user is already signed in (after redirect)
-      if (authInstance.isSignedIn.get()) {
-        console.log('User is already signed in!');
-        const user = authInstance.currentUser.get();
-        this.userEmail = user.getBasicProfile().getEmail();
-        this.signedIn = true;
-        console.log('Google Drive sign-in successful:', this.userEmail);
-        await this.ensureTasmanFolder();
-        return true;
-      }
-      
-      // Use popup mode only to avoid page refresh
-      console.log('Trying signIn with popup mode...');
-      const user = await authInstance.signIn({
-        ux_mode: 'popup'
-      });
-      
-      console.log('User object received:', user);
-      console.log('Auth response:', user.getAuthResponse());
-      
-      this.userEmail = user.getBasicProfile().getEmail();
-      this.signedIn = true;
-      
-      console.log('Google Drive sign-in successful:', this.userEmail);
-      await this.ensureTasmanFolder();
-      return true;
     } catch (error) {
-      console.error('Google Drive sign-in failed:', error);
-      console.error('Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        error: error,
-        type: typeof error,
-        keys: error && typeof error === 'object' ? Object.keys(error) : []
-      });
-      
-      // Check if it's a Google auth error with specific handling
-      if (error && typeof error === 'object' && 'error' in error) {
-        console.error('Google Auth Error Type:', (error as any).error);
-        console.error('Google Auth Error Details:', (error as any));
-        
-        // Try to get more specific error information
-        if ((error as any).error === 'server_error') {
-          console.error('Server error - possible causes:');
-          console.error('1. OAuth consent screen not properly configured');
-          console.error('2. Client ID domain mismatch'); 
-          console.error('3. API quotas exceeded');
-          console.error('4. Project billing issues');
-          console.error('Current origin:', window.location.origin);
-          console.error('Current CLIENT_ID:', CLIENT_ID);
-          console.error('');
-          console.error('PLEASE VERIFY IN GOOGLE CLOUD CONSOLE:');
-          console.error(`1. Go to: https://console.cloud.google.com/apis/credentials`);
-          console.error(`2. Edit OAuth Client: ${CLIENT_ID}`);
-          console.error(`3. Check Authorized JavaScript origins contains: ${window.location.origin}`);
-          console.error(`4. Check Authorized redirect URIs contains: ${window.location.origin}`);
-        }
-      }
-      
       return false;
     }
   }
@@ -190,13 +179,20 @@ class GoogleDriveManager {
     if (!this.initialized) return;
 
     try {
-      const authInstance = gapi.auth2.getAuthInstance();
-      await authInstance.signOut();
+      if (this.accessToken) {
+        // Revoke the access token
+        window.google.accounts.oauth2.revoke(this.accessToken);
+        this.accessToken = undefined;
+      }
+      
+      // Clear gapi client token
+      window.gapi.client.setToken(null);
+      
       this.signedIn = false;
       this.userEmail = undefined;
       this.tasmanFolderId = undefined;
     } catch (error) {
-      console.error('Google Drive sign-out failed:', error);
+      // Ignore sign-out errors
     }
   }
 
@@ -207,7 +203,7 @@ class GoogleDriveManager {
 
     try {
       // Check if folder already exists
-      const response = await gapi.client.drive.files.list({
+      const response = await window.gapi.client.drive.files.list({
         q: `name='${TASMAN_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
         spaces: 'drive'
       });
@@ -218,7 +214,7 @@ class GoogleDriveManager {
       }
 
       // Create folder if it doesn't exist
-      const createResponse = await gapi.client.drive.files.create({
+      const createResponse = await window.gapi.client.drive.files.create({
         resource: {
           name: TASMAN_FOLDER_NAME,
           mimeType: 'application/vnd.google-apps.folder'
@@ -228,13 +224,12 @@ class GoogleDriveManager {
       this.tasmanFolderId = createResponse.result.id || '';
       return this.tasmanFolderId;
     } catch (error) {
-      console.error('Failed to ensure Tasman folder:', error);
       throw error;
     }
   }
 
   async uploadBoard(board: Board): Promise<boolean> {
-    if (!this.signedIn || !this.tasmanFolderId) {
+    if (!this.signedIn || !this.tasmanFolderId || !this.accessToken) {
       return false;
     }
 
@@ -243,7 +238,7 @@ class GoogleDriveManager {
       const fileContent = JSON.stringify(board, null, 2);
       
       // Check if file already exists
-      const existingResponse = await gapi.client.drive.files.list({
+      const existingResponse = await window.gapi.client.drive.files.list({
         q: `name='${fileName}' and parents in '${this.tasmanFolderId}' and trashed=false`
       });
 
@@ -266,20 +261,35 @@ class GoogleDriveManager {
         close_delim;
 
       if (existingResponse.result.files && existingResponse.result.files.length > 0) {
-        // Update existing file
+        // Update existing file (don't include parents in update)
         const fileId = existingResponse.result.files[0].id!;
-        await gapi.client.request({
+        
+        const updateMetadata = {
+          name: fileName
+          // Don't include parents in update requests
+        };
+
+        const updateMultipartRequestBody =
+          delimiter +
+          'Content-Type: application/json\r\n\r\n' +
+          JSON.stringify(updateMetadata) +
+          delimiter +
+          'Content-Type: application/json\r\n\r\n' +
+          fileContent +
+          close_delim;
+
+        await window.gapi.client.request({
           path: `https://www.googleapis.com/upload/drive/v3/files/${fileId}`,
           method: 'PATCH',
           params: { uploadType: 'multipart' },
           headers: {
             'Content-Type': `multipart/related; boundary="${boundary}"`
           },
-          body: multipartRequestBody
+          body: updateMultipartRequestBody
         });
       } else {
         // Create new file
-        await gapi.client.request({
+        await window.gapi.client.request({
           path: 'https://www.googleapis.com/upload/drive/v3/files',
           method: 'POST',
           params: { uploadType: 'multipart' },
@@ -292,7 +302,6 @@ class GoogleDriveManager {
 
       return true;
     } catch (error) {
-      console.error('Failed to upload board to Google Drive:', error);
       return false;
     }
   }
@@ -305,7 +314,7 @@ class GoogleDriveManager {
     try {
       const fileName = `${boardId}.json`;
       
-      const response = await gapi.client.drive.files.list({
+      const response = await window.gapi.client.drive.files.list({
         q: `name='${fileName}' and parents in '${this.tasmanFolderId}' and trashed=false`
       });
 
@@ -314,14 +323,15 @@ class GoogleDriveManager {
       }
 
       const fileId = response.result.files[0].id || '';
-      const fileResponse = await gapi.client.drive.files.get({
+      const fileResponse = await window.gapi.client.drive.files.get({
         fileId,
         alt: 'media'
       });
 
-      return JSON.parse(fileResponse.body) as Board;
+      const boardData = JSON.parse(fileResponse.body) as Board;
+      
+      return boardData;
     } catch (error) {
-      console.error('Failed to download board from Google Drive:', error);
       return null;
     }
   }
@@ -332,7 +342,7 @@ class GoogleDriveManager {
     }
 
     try {
-      const response = await gapi.client.drive.files.list({
+      const response = await window.gapi.client.drive.files.list({
         q: `parents in '${this.tasmanFolderId}' and trashed=false and name contains '.json'`,
         fields: 'files(id,name,modifiedTime)'
       });
@@ -347,7 +357,6 @@ class GoogleDriveManager {
         modifiedTime: file.modifiedTime || ''
       }));
     } catch (error) {
-      console.error('Failed to list cloud boards:', error);
       return [];
     }
   }
@@ -360,7 +369,7 @@ class GoogleDriveManager {
     try {
       const fileName = `${boardId}.json`;
       
-      const response = await gapi.client.drive.files.list({
+      const response = await window.gapi.client.drive.files.list({
         q: `name='${fileName}' and parents in '${this.tasmanFolderId}' and trashed=false`
       });
 
@@ -369,12 +378,194 @@ class GoogleDriveManager {
       }
 
       const fileId = response.result.files[0].id || '';
-      await gapi.client.drive.files.delete({ fileId });
+      await window.gapi.client.drive.files.delete({ fileId });
       
       return true;
     } catch (error) {
-      console.error('Failed to delete cloud board:', error);
       return false;
+    }
+  }
+
+  async shareBoardWithEmail(boardId: string, email: string, permission: 'reader' | 'writer' = 'writer'): Promise<boolean> {
+    if (!this.signedIn || !this.tasmanFolderId) {
+      return false;
+    }
+
+    try {
+      const fileName = `${boardId}.json`;
+      
+      // Find the board file
+      const response = await window.gapi.client.drive.files.list({
+        q: `name='${fileName}' and parents in '${this.tasmanFolderId}' and trashed=false`
+      });
+
+      if (!response.result.files || response.result.files.length === 0) {
+        return false;
+      }
+
+      const fileId = response.result.files[0].id || '';
+      
+      // Create permission for the email
+      await window.gapi.client.drive.permissions.create({
+        fileId: fileId,
+        resource: {
+          role: permission,
+          type: 'user',
+          emailAddress: email
+        },
+        sendNotificationEmail: true
+      });
+
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async getBoardPermissions(boardId: string): Promise<BoardPermission[]> {
+    if (!this.signedIn || !this.tasmanFolderId) {
+      return [];
+    }
+
+    try {
+      const fileName = `${boardId}.json`;
+      
+      // Find the board file
+      const response = await window.gapi.client.drive.files.list({
+        q: `name='${fileName}' and parents in '${this.tasmanFolderId}' and trashed=false`
+      });
+
+      if (!response.result.files || response.result.files.length === 0) {
+        return [];
+      }
+
+      const fileId = response.result.files[0].id || '';
+      
+      // Get permissions
+      const permissionsResponse = await window.gapi.client.drive.permissions.list({
+        fileId: fileId,
+        fields: 'permissions(emailAddress,role,type)'
+      });
+
+      const permissions = (permissionsResponse.result.permissions || []) as DrivePermission[];
+      return permissions
+        .filter((p: DrivePermission) => p.type === 'user' && p.emailAddress)
+        .map((p: DrivePermission) => ({
+          id: p.id || '',
+          emailAddress: p.emailAddress || '',
+          role: p.role || ''
+        }));
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async removeSharePermission(boardId: string, email: string): Promise<boolean> {
+    if (!this.signedIn || !this.tasmanFolderId) {
+      return false;
+    }
+
+    try {
+      const fileName = `${boardId}.json`;
+      
+      // Find the board file
+      const response = await window.gapi.client.drive.files.list({
+        q: `name='${fileName}' and parents in '${this.tasmanFolderId}' and trashed=false`
+      });
+
+      if (!response.result.files || response.result.files.length === 0) {
+        return false;
+      }
+
+      const fileId = response.result.files[0].id || '';
+      
+      // Get permissions to find the permission ID
+      const permissionsResponse = await window.gapi.client.drive.permissions.list({
+        fileId: fileId,
+        fields: 'permissions(id,emailAddress,type)'
+      });
+
+      const permissions = (permissionsResponse.result.permissions || []) as DrivePermission[];
+      const targetPermission = permissions.find((p: DrivePermission) => 
+        p.type === 'user' && p.emailAddress === email
+      );
+
+      if (!targetPermission || !targetPermission.id) {
+        return false;
+      }
+
+      // Delete the permission
+      await window.gapi.client.drive.permissions.delete({
+        fileId: fileId,
+        permissionId: targetPermission.id
+      });
+
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async listSharedBoards(): Promise<{ id: string; name: string; owner: string; modifiedTime: string }[]> {
+    if (!this.signedIn) {
+      return [];
+    }
+
+    try {
+      // Search for shared JSON files (boards shared with us)
+      const response = await window.gapi.client.drive.files.list({
+        q: `name contains '.json' and sharedWithMe=true and trashed=false`,
+        fields: 'files(id,name,owners,modifiedTime)'
+      });
+
+      if (!response.result.files) {
+        return [];
+      }
+
+      return (response.result.files as DriveFile[])
+        .filter((file: DriveFile) => (file.name || '').endsWith('.json'))
+        .map((file: DriveFile) => ({
+          id: (file.name || '').replace('.json', ''),
+          name: (file.name || '').replace('.json', ''),
+          owner: file.owners && file.owners[0] ? (file.owners[0].displayName || file.owners[0].emailAddress || 'Unknown') : 'Unknown',
+          modifiedTime: file.modifiedTime || ''
+        }));
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async downloadSharedBoard(boardId: string): Promise<Board | null> {
+    if (!this.signedIn) {
+      return null;
+    }
+
+    try {
+      const fileName = `${boardId}.json`;
+      
+      // Search for the shared board file
+      const response = await window.gapi.client.drive.files.list({
+        q: `name='${fileName}' and sharedWithMe=true and trashed=false`
+      });
+
+      if (!response.result.files || response.result.files.length === 0) {
+        return null;
+      }
+
+      const fileId = response.result.files[0].id || '';
+      const fileResponse = await window.gapi.client.drive.files.get({
+        fileId,
+        alt: 'media'
+      });
+
+      const boardData = JSON.parse(fileResponse.body) as Board;
+      
+      // Mark as shared
+      boardData.isShared = true;
+      
+      return boardData;
+    } catch (error) {
+      return null;
     }
   }
 
