@@ -140,6 +140,11 @@
   flex: 1;
 }
 
+.nav-text-instructions {
+  flex: 1;
+  color: #000;
+}
+
 .instructions-main {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 15px;

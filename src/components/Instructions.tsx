@@ -461,7 +461,7 @@ const Instructions: React.FC<InstructionsProps> = ({ onBack }) => {
                     onClick={() => setActiveSection(section.id)}
                   >
                     <span className="nav-icon">{section.icon}</span>
-                    <span className="nav-text">{section.title.replace(/^[^\s]+\s/, '')}</span>
+                    <span className="nav-text-instructions">{section.title.replace(/^[^\s]+\s/, '')}</span>
                   </button>
                 </li>
               ))}
