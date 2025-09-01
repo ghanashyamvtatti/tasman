@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCloudSync } from '../contexts/CloudSyncContext';
+import { useGoogleLogin } from '@react-oauth/google';
 import './CloudSync.css';
 
 interface CloudSyncProps {
@@ -7,19 +8,30 @@ interface CloudSyncProps {
 }
 
 const CloudSync: React.FC<CloudSyncProps> = ({ compact = false }) => {
-  const { status, signIn, signOut, syncToCloud, syncFromCloud } = useCloudSync();
+  const { status, setTokenAndSignIn, signOut, syncToCloud, syncFromCloud } = useCloudSync();
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [showDetails, setShowDetails] = useState(false);
 
-  const handleSignIn = async () => {
-    const success = await signIn();
-    if (success) {
-      setSyncMessage('Successfully signed in to Google Drive!');
+  const login = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      const success = await setTokenAndSignIn(tokenResponse.access_token);
+      if (success) {
+        setSyncMessage('Successfully signed in to Google Drive!');
+        setTimeout(() => setSyncMessage(''), 3000);
+      } else {
+        setSyncMessage('Failed to sign in to Google Drive');
+        setTimeout(() => setSyncMessage(''), 3000);
+      }
+    },
+    onError: () => {
+      setSyncMessage('Google login failed');
       setTimeout(() => setSyncMessage(''), 3000);
-    } else {
-      setSyncMessage('Failed to sign in to Google Drive');
-      setTimeout(() => setSyncMessage(''), 3000);
-    }
+    },
+    scope: 'https://www.googleapis.com/auth/drive.file',
+  });
+
+  const handleSignIn = () => {
+    login();
   };
 
   const handleSignOut = async () => {

@@ -3,7 +3,7 @@ import { cloudStorageManager, CloudSyncStatus, SyncResult } from '../services/cl
 
 interface CloudSyncContextType {
   status: CloudSyncStatus;
-  signIn: () => Promise<boolean>;
+  setTokenAndSignIn: (token: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   syncToCloud: () => Promise<SyncResult>;
   syncFromCloud: () => Promise<SyncResult>;
@@ -32,9 +32,9 @@ export const CloudSyncProvider: React.FC<CloudSyncProviderProps> = ({ children }
   });
 
   useEffect(() => {
-    const initializeCloudSync = async () => {
+    const initializeCloudSync = () => {
       console.log('CloudSyncProvider: Initializing cloud sync...');
-      const initialStatus = await cloudStorageManager.initialize();
+      const initialStatus = cloudStorageManager.initialize();
       console.log('CloudSyncProvider: Received status:', initialStatus);
       setStatus(initialStatus);
     };
@@ -48,8 +48,8 @@ export const CloudSyncProvider: React.FC<CloudSyncProviderProps> = ({ children }
     setStatus(currentStatus);
   };
 
-  const signIn = async (): Promise<boolean> => {
-    const success = await cloudStorageManager.signIn();
+  const setTokenAndSignIn = async (token: string): Promise<boolean> => {
+    const success = await cloudStorageManager.setTokenAndSignIn(token);
     refreshStatus();
     return success;
   };
@@ -73,7 +73,7 @@ export const CloudSyncProvider: React.FC<CloudSyncProviderProps> = ({ children }
 
   const contextValue: CloudSyncContextType = {
     status,
-    signIn,
+    setTokenAndSignIn,
     signOut,
     syncToCloud,
     syncFromCloud,

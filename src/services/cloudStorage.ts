@@ -21,47 +21,23 @@ class CloudStorageManager {
   private syncInProgress = false;
   private lastSyncTime?: Date;
   private error?: string;
+  private isCloudEnabled = !!process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
-  async initialize(): Promise<CloudSyncStatus> {
-    try {
-      console.log('CloudStorageManager: Initializing...');
-      const status = await googleDriveManager.initialize();
-      console.log('CloudStorageManager: Google Drive status:', status);
-      
-      const result = {
-        isCloudEnabled: status.isInitialized,
-        isSignedIn: status.isSignedIn,
-        userEmail: status.userEmail,
-        lastSyncTime: this.lastSyncTime,
-        syncInProgress: this.syncInProgress,
-        error: this.error
-      };
-      
-      console.log('CloudStorageManager: Returning status:', result);
-      return result;
-    } catch (error) {
-      this.error = 'Failed to initialize cloud storage';
-      console.error('Cloud storage initialization failed:', error);
-      return {
-        isCloudEnabled: false,
-        isSignedIn: false,
-        syncInProgress: false,
-        error: this.error
-      };
-    }
+  initialize(): CloudSyncStatus {
+    return this.getStatus();
   }
 
-  async signIn(): Promise<boolean> {
+  async setTokenAndSignIn(token: string): Promise<boolean> {
     try {
-      const success = await googleDriveManager.signIn();
-      if (success) {
+      await googleDriveManager.setToken(token);
+      const status = googleDriveManager.getStatus();
+      if (status.isSignedIn) {
         this.error = undefined;
         // Auto-sync after sign-in
         setTimeout(() => this.syncToCloud(), 1000);
-      } else {
-        this.error = 'Failed to sign in to Google Drive';
+        return true;
       }
-      return success;
+      return false;
     } catch (error) {
       this.error = 'Sign-in failed';
       console.error('Cloud storage sign-in failed:', error);
@@ -71,7 +47,7 @@ class CloudStorageManager {
 
   async signOut(): Promise<void> {
     try {
-      await googleDriveManager.signOut();
+      googleDriveManager.signOut();
       this.error = undefined;
       this.lastSyncTime = undefined;
     } catch (error) {
@@ -254,7 +230,7 @@ class CloudStorageManager {
   getStatus(): CloudSyncStatus {
     const driveStatus = googleDriveManager.getStatus();
     return {
-      isCloudEnabled: driveStatus.isInitialized,
+      isCloudEnabled: this.isCloudEnabled,
       isSignedIn: driveStatus.isSignedIn,
       userEmail: driveStatus.userEmail,
       lastSyncTime: this.lastSyncTime,
